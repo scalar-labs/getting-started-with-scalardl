@@ -104,7 +104,7 @@ java -jar am-1.0.jar list [-h] asset_type
 To add a new asset to the specified category.
 
 ```
-java -jar am-1.0.jar [-h] asset_type asset
+java -jar am-1.0.jar add [-h] asset_type asset
 ```
 
 #### Options

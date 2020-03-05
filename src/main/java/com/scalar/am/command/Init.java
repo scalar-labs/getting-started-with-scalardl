@@ -6,10 +6,8 @@ import com.scalar.am.contract.AssetHistoryContract;
 import com.scalar.am.contract.ListContract;
 import com.scalar.am.contract.ListTypeContract;
 import com.scalar.am.contract.StatusChangeContract;
-import com.scalar.client.config.ClientConfig;
-import com.scalar.client.service.ClientService;
-import com.scalar.client.service.StatusCode;
-import com.scalar.rpc.ledger.LedgerServiceResponse;
+import com.scalar.dl.client.config.ClientConfig;
+import com.scalar.dl.client.service.ClientService;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -131,8 +129,9 @@ public class Init extends LedgerClientExecutor implements Runnable {
   }
 
   private void registerCertificate(ClientService service) throws Exception {
-    LedgerServiceResponse ledgerServiceResponse = service.registerCertificate();
-    if (ledgerServiceResponse.getStatus() != StatusCode.OK.get()) {
+    try {
+      service.registerCertificate();
+    }  catch (Exception ex) {
       throw new Exception("Error during certificate registration");
     }
   }
@@ -161,9 +160,9 @@ public class Init extends LedgerClientExecutor implements Runnable {
       String id = name + "_" + holderId;
       String path = file.getAbsolutePath();
 
-      LedgerServiceResponse response =
-          service.registerContract(id, name, path, Optional.ofNullable(property));
-      if (response.getStatus() != StatusCode.OK.get()) {
+      try {
+        service.registerContract(id, name, path, Optional.ofNullable(property));
+      } catch (Exception ex) {
         throw new Exception("Failed to register contract");
       }
     }

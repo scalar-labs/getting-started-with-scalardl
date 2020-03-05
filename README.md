@@ -72,7 +72,7 @@ In order to execute a contract it has to be registered on the Scalar DL network.
 ### Implement contracts
 
 Contracts are executed on Scalar DL networks. They are able to read and write data into the ledger of the Scalar DL network.
-A contract needs to be a public Java class which extends the `com.scalar.ledger.contract.Contract` class of the Ledger library.
+A contract needs to be a public Java class which extends the `com.scalar.dl.ledger.contract.Contract` class of the Ledger library.
 Contract implementation guidelines :
 - A single contract code should not involve overly complicated business logic. If you have a complicated business logic, disassemble the logic and use nested invocation
 - Use of external Java libraries except the DLT libraries is not allowed
@@ -82,8 +82,8 @@ Contract implementation guidelines :
 
 A contract's implementation may look like
 ```
-import com.scalar.ledger.contract.Contract;
-import com.scalar.ledger.ledger.Ledger;
+import com.scalar.dl.ledger.contract.Contract;
+import com.scalar.dl.ledger.database.Ledger;
 import java.util.Optional;
 import javax.json.Json;
 import javax.json.JsonObject;
@@ -122,7 +122,7 @@ The **age** refers to the current modification iteration of the key. It starts a
 Check [ListContract](./src/main/java/com/scalar/am/contract/ListContract.java).
 We implemented it to get the borrowing status of the specified asset with codes.
 
-```
+```java
 Optional<Asset> borrowingStatus = ledger.get(id);
 long timestamp = borrowingStatus.get().data().getJsonNumber("timestamp").longValue(); // our value is in format of JSON
 String status = borrowingStatus.get().data().getString("status");
@@ -265,36 +265,34 @@ Notice that we need a ClientConfig to create a ClientService.
 ClientConfig can be initiated with Properties of following format:
 
 ```
-scalar.ledger.client.server_host=<address of one server of the Scalar DL network>
-scalar.ledger.client.server_port=<port of one server of the Scalar DL network>
-scalar.ledger.client.cert_holder_id=<holder id>
-scalar.ledger.client.cert_path=<path to certificate>
-scalar.ledger.client.cert_version=<version of certificate>
-scalar.ledger.client.private_key_path=<path to private key>
-scalar.ledger.client.tls.enabled=<true to enable TLS between Scalar DL network>
-scalar.ledger.client.authorization.credential=Basic: <credential>
+scalar.dl.client.server.host=<address of one server of the Scalar DL network>
+scalar.dl.client.server.port=<port of one server of the Scalar DL network>
+scalar.dl.client.cert_holder_id=<holder id>
+scalar.dl.client.cert_path=<path to certificate>
+scalar.dl.client.cert_version=<version of certificate>
+scalar.dl.client.private_key_path=<path to private key>
+scalar.dl.client.tls.enabled=<true to enable TLS between Scalar DL network>
+scalar.dl.client.authorization.credential=Basic: <credential>
 ```
 
 #### Register certificate
 
 Scalar DLT network verifies the signatures attached in `Contract registration` and `Contract execution` requests with X.509 certificate to authenticate users.
-We can use `LedgerServiceResponse registerCertificate()` method of ClientService to register a certificate specified in the config.
+We can use `registerCertificate()` method of ClientService to register a certificate specified in the config.
 
 
 ```java
-LedgerServiceResponse ledgerServiceResponse = clientService.registerCertificate();
+clientService.registerCertificate();
 ```
 
 Check [Init](./src/main/java/com/scalar/am/command/Init.java).
 We registered certificate when user execute `init` command, and check the response from Scalar DL network.
 
-```
-LedgerServiceResponse ledgerServiceResponse = clientService.registerCertificate();
-if (ledgerServiceResponse.getStatus() != StatusCode.OK.get()) {
-  System.err.println("Error during certificate registration");
-  System.err.println("Status code: " + ledgerServiceResponse.getStatus());
-  System.err.println("Message: " + ledgerServiceResponse.getMessage());
-  return;
+```java
+try {
+  clientService.registerCertificate();
+} catch (Exception ex) {
+  throw new Exception("Error during certificate registration");
 }
 ```
 
@@ -304,7 +302,7 @@ After a certificate is registered, the private key will be used to sign `Contrac
 
 
 #### Register a contract
-We can use `LedgerServiceResponse registerContract(String id, String name, String path, Optional<JsonObject> properties)` method of ClientService to register a contract class file.
+We can use `registerContract(String id, String name, String path, Optional<JsonObject> properties)` method of ClientService to register a contract class file.
 
 **Remark:** As the private key of the user is passed to sign the contract, only the user who registered the contract, or another user holding the same key, will have access to that contract.
 
@@ -319,44 +317,43 @@ for (Path contract : contractList) {
   String canonicalName = contractId.substring(0, contractId.indexOf("_"));
   JsonObject property = null;
 
-  LedgerServiceResponse response = service.registerContract(contractId, canonicalName, contractPath, Optional.ofNullable(property));
-
-  if (response.getStatus() != StatusCode.OK.get()) {
+  try {
+     service.registerContract(contractId, canonicalName, contractPath, Optional.ofNullable(property));
+  } catch (Exception ex) {
     System.err.println("Error during contract registration");
-    System.err.println("Status code: " + response.getStatus());
-    System.err.println("Message: " + response.getMessage());
     throw new Exception("Failed to register contract");
   }
 }
 ```
 
 #### Execute a contract
-We can use `ContractExecutionResponse executeContract(String id, JsonObject argument)` method of ClientService to execute registered contracts.
+We can use `ContractExecutionResult executeContract(String id, JsonObject argument)` method of ClientService to execute registered contracts.
 Check [LedgerClientExecutor](./src/main/java/com/scalar/am/command/LedgerClientExecutor.java).
 It is a generic function for command runners. It loads the response's JSON to JsonObject.
 
 ```java
-ContractExecutionResponse response = clientService.executeContract(contractId, argument);
-if (response.getStatus() != StatusCode.OK.get()) {
+try {
+  ContractExecutionResult result = clientService.executeContract(contractId, object);
+  if (response.getResult().isPresent()) {
+	JsonObject result = result.getResult().get();
+  }
+} catch (Exception ex) {
   System.err.println("Error during contract execution");
-  System.err.println("Status code: " + response.getStatus());
-  System.err.println("Message: " + response.getMessage());
   return;
 }
-JsonReader reader = Json.createReader(new StringReader(response.getResult()));
-JsonObject result = reader.readObject();
 ```
 
 #### Validate ledger data integrity
 
-We can use `LedgerValidationResponse validateLedger(String assetId)` to validate if the asset data stored on the ledger has not been tempered.
+We can use `LedgerValidationResult validateLedger(String assetId)` to validate if the asset data stored on the ledger has not been tempered.
 It is to be noted that any registered user can validate any asset of the ledger.
 Check [ValidateAsset](./src/main/java/com/scalar/am/command/ValidateAsset.java).
 
 ```java
-LedgerValidationResponse response = clientService.validateLedger(id);
-if (response.getStatus() != StatusCode.OK.get()) {
-  System.err.println(response.getMessage());
+LedgerValidationResult result = clientService.validateLedger(id);
+if (!(result.getCode().equals(StatusCode.OK))) {
+  System.err.println("Error during asset validate");
+  System.err.println("Status code: " + result.getCode().get());
   return;
 }
 System.out.println("Asset " + id + " is untampered");

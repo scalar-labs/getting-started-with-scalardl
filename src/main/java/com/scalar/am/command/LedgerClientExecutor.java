@@ -2,27 +2,26 @@ package com.scalar.am.command;
 
 import com.google.inject.Guice;
 import com.google.inject.Injector;
-import com.scalar.client.config.ClientConfig;
-import com.scalar.client.service.ClientModule;
-import com.scalar.client.service.ClientService;
-import com.scalar.client.service.StatusCode;
-import com.scalar.rpc.ledger.ContractExecutionResponse;
-import com.scalar.rpc.ledger.LedgerValidationResponse;
+import com.scalar.dl.client.config.ClientConfig;
+import com.scalar.dl.client.service.ClientModule;
+import com.scalar.dl.client.service.ClientService;
+import com.scalar.dl.ledger.model.ContractExecutionResult;
+import com.scalar.dl.ledger.model.LedgerValidationResult;
+import com.scalar.dl.ledger.service.StatusCode;
+
 import java.io.File;
-import java.io.StringReader;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.Map;
 import javax.json.Json;
 import javax.json.JsonObject;
-import javax.json.JsonReader;
 import javax.json.JsonWriter;
 import javax.json.JsonWriterFactory;
 import javax.json.stream.JsonGenerator;
 import javax.xml.bind.DatatypeConverter;
 
-/** Class used to execute method on a {@link com.scalar.ledger.ledger.Ledger} */
+/** Class used to execute method on a {@link com.scalar.dl.ledger.database.Ledger} */
 abstract class LedgerClientExecutor {
 
   private ClientConfig loadClientConfig() throws Exception {
@@ -50,33 +49,30 @@ abstract class LedgerClientExecutor {
                 (contractParameter != null)
                     ? contractParameter
                     : Json.createObjectBuilder().build();
-            ContractExecutionResponse response = clientService.executeContract(contractId, object);
-            if (response.getStatus() != StatusCode.OK.get()) {
+            try {
+              ContractExecutionResult result = clientService.executeContract(contractId, object);
+              prettyPrintJson(result.getResult().get());
+            } catch (Exception ex) {
               System.err.println("Error during contract execution");
-              System.err.println("Status code: " + response.getStatus());
-              System.err.println("Message: " + response.getMessage());
-              return;
             }
-            JsonReader reader = Json.createReader(new StringReader(response.getResult()));
-            prettyPrintJson((JsonObject) reader.read());
           };
 
       this.executeOnLedger(f);
     } catch (Exception e) {
       e.printStackTrace();
-      ;
     }
   }
 
   protected void validateAsset(String id) {
     try {
+      ClientConfig config = loadClientConfig();
+      String contractId = config.getCertHolderId() + "-" + id;
       LedgerExecutorFunction f =
           (clientService) -> {
-            LedgerValidationResponse response = clientService.validateLedger(id);
-            if (response.getStatus() != StatusCode.OK.get()) {
+            LedgerValidationResult result = clientService.validateLedger(contractId);
+            if (!(result.getCode().equals(StatusCode.OK))) {
               System.err.println("Error during asset validate");
-              System.err.println("Status code: " + response.getStatus());
-              System.err.println("Message: " + response.getMessage());
+              System.err.println("Status code: " + result.getCode().get());
               return;
             }
             System.out.println("Asset " + id + " is untampered");
@@ -104,7 +100,7 @@ abstract class LedgerClientExecutor {
   /**
    * Pretty print the json to the standard output
    *
-   * @param json the json to print
+   *  @param jsonObject the json to print
    */
   protected void prettyPrintJson(JsonObject jsonObject) {
     if (jsonObject != null) {
@@ -114,7 +110,6 @@ abstract class LedgerClientExecutor {
       JsonWriterFactory factory = Json.createWriterFactory(config);
       JsonWriter writer = factory.createWriter(System.out);
       writer.writeObject(jsonObject);
-      System.out.println("");
       writer.close();
     }
   }
